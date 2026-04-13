@@ -79,6 +79,26 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     expect(response.content).to eq("Hello!")
   end
 
+  it "wraps redaction errors in RubyLLM::TopSecret::Error" do
+    allow(TopSecret::Text).to receive(:filter_all).and_raise(StandardError, "NER model missing")
+
+    chat = new_chat
+
+    expect { chat.ask("Hello") }.to raise_error(RubyLLM::TopSecret::Error, /NER model missing/)
+  end
+
+  it "wraps rehydration errors in RubyLLM::TopSecret::Error" do
+    stub_filter_all(
+      {"My name is Ralph" => "My name is [PERSON_1]"},
+      labels: {PERSON_1: "Ralph"}
+    )
+    allow(TopSecret::FilteredText).to receive(:restore).and_raise(StandardError, "restore failed")
+
+    chat = new_chat
+
+    expect { chat.ask("My name is Ralph") }.to raise_error(RubyLLM::TopSecret::Error, /restore failed/)
+  end
+
   it "uses consistent labels for the same entity across messages" do
     stub_filter_all({"My name is Ralph" => "My name is [PERSON_1]"})
     stub_filter_all({
