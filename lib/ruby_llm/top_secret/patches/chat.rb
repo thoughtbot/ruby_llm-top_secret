@@ -14,6 +14,8 @@ module RubyLLM
       #
       # Original message content is preserved after the call via +ensure+.
       #
+      # @raise [RubyLLM::TopSecret::Error] if redaction or rehydration fails
+      #
       # @example
       #   chat = RubyLLM.chat
       #   chat.ask("My name is Ralph")
@@ -35,6 +37,10 @@ module RubyLLM
           response.content = restored.output
 
           response
+        rescue RubyLLM::Error
+          raise
+        rescue => e
+          raise RubyLLM::TopSecret::Error, e.message
         ensure
           originals.each { |msg, content| msg.content = content }
         end
