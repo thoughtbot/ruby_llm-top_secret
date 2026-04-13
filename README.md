@@ -18,7 +18,51 @@ bundle install
 
 ## Usage
 
-_Coming soon._ This gem is under active development.
+Requiring the gem automatically patches `RubyLLM::Chat` to redact sensitive information before it reaches the LLM provider, and rehydrate placeholders in the response.
+
+```ruby
+chat = RubyLLM.chat
+response = chat.ask("My name is Ralph and my email is ralph@thoughtbot.com")
+
+# The provider receives: "My name is [PERSON_1] and my email is [EMAIL_1]"
+# The response comes back with placeholders restored:
+puts response.content
+# => "Nice to meet you, Ralph!"
+```
+
+### How it works
+
+1. Before sending to the provider, all messages are redacted using `TopSecret::Text.filter_all`
+2. The provider only sees placeholders like `[PERSON_1]` and `[EMAIL_1]`
+3. The response is rehydrated using `TopSecret::FilteredText.restore`
+4. Original message content is always preserved locally
+
+### Rails integration
+
+In Rails apps with `acts_as_chat`, the gem automatically patches the persistence layer via a Railtie. The rehydrated response is what gets saved to your database.
+
+```ruby
+chat = Chat.create!(model: "claude-sonnet-4-5")
+chat.ask("My name is Ralph")
+
+assistant_message = chat.messages.find_by(role: "assistant")
+puts assistant_message.content
+# => "Nice to meet you, Ralph!" (not "Nice to meet you, [PERSON_1]!")
+```
+
+### Error handling
+
+Errors from Top Secret (redaction or rehydration failures) are wrapped in `RubyLLM::TopSecret::Error`. Errors from RubyLLM itself (API failures, etc.) are passed through unchanged.
+
+```ruby
+begin
+  chat.ask("Hello")
+rescue RubyLLM::TopSecret::Error => e
+  # Top Secret failed (e.g., NER model missing)
+rescue RubyLLM::Error => e
+  # RubyLLM API error
+end
+```
 
 ## Development
 
@@ -26,12 +70,33 @@ After checking out the repo, run `bin/setup` to install dependencies. Then, run 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/thoughtbot/ruby_llm-top_secret. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/thoughtbot/ruby_llm-top_secret/blob/main/CODE_OF_CONDUCT.md).
+See the [CONTRIBUTING] document.
+Thank you, [contributors]!
+
+[CONTRIBUTING]: CONTRIBUTING.md
+[contributors]: https://github.com/thoughtbot/ruby_llm-top_secret/graphs/contributors
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+ruby_llm-top_secret is Copyright (c) thoughtbot, inc.
+It is free software, and may be redistributed
+under the terms specified in the [LICENSE] file.
 
-## Code of Conduct
+[LICENSE]: /LICENSE.txt
 
-Everyone interacting in the RubyLLM::TopSecret project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/thoughtbot/ruby_llm-top_secret/blob/main/CODE_OF_CONDUCT.md).
+<!-- START /templates/footer.md -->
+## About thoughtbot
+
+![thoughtbot](https://thoughtbot.com/thoughtbot-logo-for-readmes.svg)
+
+This repo is maintained and funded by thoughtbot, inc.
+The names and logos for thoughtbot are trademarks of thoughtbot, inc.
+
+We love open source software!
+See [our other projects][community].
+We are [available for hire][hire].
+
+[community]: https://thoughtbot.com/community?utm_source=github
+[hire]: https://thoughtbot.com/hire-us?utm_source=github
+
+<!-- END /templates/footer.md -->

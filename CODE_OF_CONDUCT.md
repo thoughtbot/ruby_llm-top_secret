@@ -1,10 +1,6 @@
-# Code of Conduct
+# Code of conduct
 
-"ruby_llm-top_secret" follows [The Ruby Community Conduct Guideline](https://www.ruby-lang.org/en/conduct) in all "collaborative space", which is defined as community communications channels (such as mailing lists, submitted patches, commit comments, etc.):
+By participating in this project, you agree to abide by the
+[thoughtbot code of conduct][1].
 
-* Participants will be tolerant of opposing views.
-* Participants must ensure that their language and actions are free of personal attacks and disparaging personal remarks.
-* When interpreting the words and actions of others, participants should always assume good intentions.
-* Behaviour which can be reasonably considered harassment will not be tolerated.
-
-If you have any concerns about behaviour within this project, please contact us at ["stevepolito@hey.com"](mailto:"stevepolito@hey.com").
+[1]: https://thoughtbot.com/open-source-code-of-conduct
