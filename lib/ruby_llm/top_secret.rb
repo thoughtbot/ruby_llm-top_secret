@@ -15,3 +15,7 @@ module RubyLLM
 end
 
 RubyLLM::Chat.prepend(RubyLLM::TopSecret::Patches::Chat)
+
+if defined?(Rails::Railtie)
+  require_relative "top_secret/railtie"
+end
