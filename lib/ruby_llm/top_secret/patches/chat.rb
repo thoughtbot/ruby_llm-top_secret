@@ -18,9 +18,10 @@ module RubyLLM
         def complete(&)
           originals = messages.to_h { |msg| [msg, msg.content] }
 
-          contents = messages.map(&:content)
+          redactable = messages.reject { |msg| msg.content.nil? || msg.content.empty? }
+          contents = redactable.map(&:content)
           batch_result = ::TopSecret::Text.filter_all(contents)
-          messages.zip(batch_result.items).each { |msg, item| msg.content = item.output }
+          redactable.zip(batch_result.items).each { |msg, item| msg.content = item.output }
 
           super
         ensure

@@ -44,6 +44,17 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     expect(user_message.content).to eq("My email is ralph@example.com")
   end
 
+  it "skips empty messages when redacting" do
+    stub_filter_all("My email is ralph@example.com" => "My email is [EMAIL_1]")
+
+    chat = new_chat
+    chat.messages << RubyLLM::Message.new(role: :assistant, content: nil)
+    chat.ask("My email is ralph@example.com")
+
+    expect(TopSecret::Text).to have_received(:filter_all)
+      .with(["My email is ralph@example.com"])
+  end
+
   it "uses consistent labels for the same entity across messages" do
     stub_filter_all("My name is Ralph" => "My name is [PERSON_1]")
     stub_filter_all(
