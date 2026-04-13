@@ -10,7 +10,7 @@ RSpec.describe "acts_as_chat persistence" do
       .to_return_json(body: {content: [{type: "text", text: "Hello [PERSON_1]"}]})
   end
 
-  it "persists the rehydrated response in the database" do
+  it "persists the restored response in the database" do
     stub_filter_all(
       {"My name is Ralph" => "My name is [PERSON_1]"},
       labels: {PERSON_1: "Ralph"}

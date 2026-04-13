@@ -1,6 +1,6 @@
 # RubyLLM::TopSecret
 
-Redact sensitive information from [RubyLLM](https://rubyllm.com) conversations using [Top Secret](https://github.com/thoughtbot/top_secret).
+Filter sensitive information from [RubyLLM](https://rubyllm.com) conversations using [Top Secret](https://github.com/thoughtbot/top_secret).
 
 ## Installation
 
@@ -18,7 +18,7 @@ bundle install
 
 ## Usage
 
-Requiring the gem automatically patches `RubyLLM::Chat` to redact sensitive information before it reaches the LLM provider, and rehydrate placeholders in the response.
+Requiring the gem automatically patches `RubyLLM::Chat` to filter sensitive information before it reaches the LLM provider, and restore placeholders in the response.
 
 ```ruby
 chat = RubyLLM.chat
@@ -32,14 +32,14 @@ puts response.content
 
 ### How it works
 
-1. Before sending to the provider, all messages are redacted using `TopSecret::Text.filter_all`
+1. Before sending to the provider, all messages are filtered using `TopSecret::Text.filter_all`
 2. The provider only sees placeholders like `[PERSON_1]` and `[EMAIL_1]`
-3. The response is rehydrated using `TopSecret::FilteredText.restore`
+3. The response is restored using `TopSecret::FilteredText.restore`
 4. Original message content is always preserved locally
 
 ### Rails integration
 
-In Rails apps with `acts_as_chat`, the gem automatically patches the persistence layer via a Railtie. The rehydrated response is what gets saved to your database.
+In Rails apps with `acts_as_chat`, the gem automatically patches the persistence layer via a Railtie. The restored response is what gets saved to your database.
 
 ```ruby
 chat = Chat.create!(model: "claude-sonnet-4-5")
@@ -52,7 +52,7 @@ puts assistant_message.content
 
 ### Error handling
 
-Errors from Top Secret (redaction or rehydration failures) are wrapped in `RubyLLM::TopSecret::Error`. Errors from RubyLLM itself (API failures, etc.) are passed through unchanged.
+Errors from Top Secret (filtering or restoring failures) are wrapped in `RubyLLM::TopSecret::Error`. Errors from RubyLLM itself (API failures, etc.) are passed through unchanged.
 
 ```ruby
 begin
