@@ -9,7 +9,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
   end
 
   it "redacts sensitive content before sending to the provider" do
-    stub_filter_all("My email is ralph@example.com" => "My email is [EMAIL_1]")
+    stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
     chat.ask("My email is ralph@example.com")
@@ -19,12 +19,12 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
   end
 
   it "redacts all messages in a multi-turn conversation" do
-    stub_filter_all("My email is ralph@example.com" => "My email is [EMAIL_1]")
-    stub_filter_all(
+    stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
+    stub_filter_all({
       "My email is ralph@example.com" => "My email is [EMAIL_1]",
       "Hello!" => "Hello!",
       "My SSN is 123-45-6789" => "My SSN is [SSN_1]"
-    )
+    })
 
     chat = new_chat
     chat.ask("My email is ralph@example.com")
@@ -35,7 +35,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
   end
 
   it "preserves original content in messages after the call" do
-    stub_filter_all("My email is ralph@example.com" => "My email is [EMAIL_1]")
+    stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
     chat.ask("My email is ralph@example.com")
@@ -45,7 +45,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
   end
 
   it "skips empty messages when redacting" do
-    stub_filter_all("My email is ralph@example.com" => "My email is [EMAIL_1]")
+    stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
     chat.messages << RubyLLM::Message.new(role: :assistant, content: nil)
@@ -55,13 +55,37 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .with(["My email is ralph@example.com"])
   end
 
-  it "uses consistent labels for the same entity across messages" do
-    stub_filter_all("My name is Ralph" => "My name is [PERSON_1]")
+  it "rehydrates placeholders in the response" do
+    stub_request(:post, messages_url)
+      .to_return_json(body: {content: [{type: "text", text: "Hello [PERSON_1]"}]})
+
     stub_filter_all(
+      {"My name is Ralph" => "My name is [PERSON_1]"},
+      labels: {PERSON_1: "Ralph"}
+    )
+
+    chat = new_chat
+    response = chat.ask("My name is Ralph")
+
+    expect(response.content).to eq("Hello Ralph")
+  end
+
+  it "passes through when no sensitive content is detected" do
+    stub_filter_all({"Hi" => "Hi"})
+
+    chat = new_chat
+    response = chat.ask("Hi")
+
+    expect(response.content).to eq("Hello!")
+  end
+
+  it "uses consistent labels for the same entity across messages" do
+    stub_filter_all({"My name is Ralph" => "My name is [PERSON_1]"})
+    stub_filter_all({
       "My name is Ralph" => "My name is [PERSON_1]",
       "Hello!" => "Hello!",
       "Ralph lives in Boston" => "[PERSON_1] lives in [LOCATION_1]"
-    )
+    })
 
     chat = new_chat
     chat.ask("My name is Ralph")
@@ -79,11 +103,11 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     end
   end
 
-  def stub_filter_all(mapping)
+  def stub_filter_all(mapping, labels: {})
     items = mapping.map do |input, output|
       TopSecret::Text::Result.new(input, output, {})
     end
-    batch = TopSecret::Text::BatchResult.new(mapping: {}, items: items)
+    batch = TopSecret::Text::BatchResult.new(mapping: labels, items: items)
 
     @filter_all_responses ||= []
     @filter_all_responses << batch
