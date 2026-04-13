@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "active_support/core_ext/object/with"
 require "ruby_llm/top_secret"
+require "webmock/rspec"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

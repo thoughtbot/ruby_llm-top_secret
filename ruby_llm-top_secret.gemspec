@@ -4,7 +4,7 @@ require_relative "lib/ruby_llm/top_secret/version"
 
 Gem::Specification.new do |spec|
   spec.name = "ruby_llm-top_secret"
-  spec.version = RubyLlm::TopSecret::VERSION
+  spec.version = RubyLLM::TopSecret::VERSION
   spec.authors = ["Steve Polito"]
   spec.email = ["stevepolito@hey.com"]
 
