@@ -18,7 +18,9 @@ RSpec.describe "acts_as_chat persistence" do
 
     Model.find_or_create_by!(model_id: "model", name: "Model", provider: "anthropic")
     chat = Chat.create!(model: "model", provider: "anthropic", assume_model_exists: true)
-    chat.ask("My name is Ralph")
+    RubyLLM::TopSecret.with_filtering do
+      chat.ask("My name is Ralph")
+    end
 
     assistant_message = chat.messages.find_by(role: "assistant")
     expect(assistant_message.content).to eq("Hello Ralph")

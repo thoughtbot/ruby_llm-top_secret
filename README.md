@@ -18,44 +18,38 @@ bundle install
 
 ## Usage
 
-Requiring the gem automatically patches `RubyLLM::Chat` to filter sensitive information before it reaches the LLM provider, and restore placeholders in the response.
+Requiring the gem patches `RubyLLM::Chat` to support filtering sensitive information before it reaches the LLM provider. Filtering is opt-in per conversation using `with_filtering`.
 
 ```ruby
-chat = RubyLLM.chat
-response = chat.ask("My name is Ralph and my email is ralph@thoughtbot.com")
+RubyLLM::TopSecret.with_filtering do
+  chat = RubyLLM.chat
+  response = chat.ask("My name is Ralph and my email is ralph@thoughtbot.com")
 
-# The provider receives: "My name is [PERSON_1] and my email is [EMAIL_1]"
-# The response comes back with placeholders restored:
-puts response.content
-# => "Nice to meet you, Ralph!"
+  # The provider receives: "My name is [PERSON_1] and my email is [EMAIL_1]"
+  # The response comes back with placeholders restored:
+  puts response.content
+  # => "Nice to meet you, Ralph!"
+end
 ```
+
+Without `with_filtering`, conversations behave normally with no filtering overhead.
 
 ### How it works
 
-1. Before sending to the provider, all messages are filtered using `TopSecret::Text.filter_all`
-2. The provider only sees placeholders like `[PERSON_1]` and `[EMAIL_1]`
-3. The response is restored using `TopSecret::FilteredText.restore`
-4. Original message content is always preserved locally
+1. Wrap your conversation in `RubyLLM::TopSecret.with_filtering`
+2. Before sending to the provider, all messages are filtered using `TopSecret::Text.filter_all`
+3. The provider only sees placeholders like `[PERSON_1]` and `[EMAIL_1]`
+4. The response is restored using `TopSecret::FilteredText.restore`
+5. Original message content is always preserved locally
 
-### Rails integration
-
-In Rails apps with `acts_as_chat`, the gem automatically patches the persistence layer via a Railtie. The restored response is what gets saved to your database.
-
-```ruby
-chat = Chat.create!(model: "claude-sonnet-4-5")
-chat.ask("My name is Ralph")
-
-assistant_message = chat.messages.find_by(role: "assistant")
-puts assistant_message.content
-# => "Nice to meet you, Ralph!" (not "Nice to meet you, [PERSON_1]!")
-```
+Filtering state is thread-isolated, so concurrent requests in a web server won't interfere with each other.
 
 ### Error handling
 
 Errors from Top Secret (filtering or restoring failures) are wrapped in `RubyLLM::TopSecret::Error`. Errors from RubyLLM itself (API failures, etc.) are passed through unchanged.
 
 ```ruby
-begin
+RubyLLM::TopSecret.with_filtering do
   chat.ask("Hello")
 rescue RubyLLM::TopSecret::Error => e
   # Top Secret failed (e.g., NER model missing)

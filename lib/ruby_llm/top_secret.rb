@@ -12,6 +12,18 @@ module RubyLLM
   module TopSecret
     # Base error class for all RubyLLM::TopSecret errors.
     class Error < StandardError; end
+
+    def self.with_filtering
+      was_filtering = Thread.current[:ruby_llm_top_secret_filter]
+      Thread.current[:ruby_llm_top_secret_filter] = true
+      yield
+    ensure
+      Thread.current[:ruby_llm_top_secret_filter] = was_filtering
+    end
+
+    def self.filtering?
+      Thread.current[:ruby_llm_top_secret_filter] == true
+    end
   end
 end
 
