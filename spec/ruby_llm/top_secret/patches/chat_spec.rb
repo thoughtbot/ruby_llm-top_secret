@@ -8,11 +8,21 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .to_return_json(body: {content: [{type: "text", text: "Hello!"}]})
   end
 
+  it "does not filter when not wrapped in with_filtering" do
+    chat = new_chat
+    chat.ask("My email is ralph@example.com")
+
+    expect(WebMock).to have_requested(:post, messages_url)
+      .with { |req| req.body.include?("ralph@example.com") }
+  end
+
   it "filters sensitive content before sending to the provider" do
     stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
-    chat = new_chat
-    chat.ask("My email is ralph@example.com")
+    RubyLLM::TopSecret.with_filtering do
+      chat = new_chat
+      chat.ask("My email is ralph@example.com")
+    end
 
     expect(WebMock).to have_requested(:post, messages_url)
       .with { |req| req.body.include?("[EMAIL_1]") && !req.body.include?("ralph@example.com") }
@@ -26,9 +36,11 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       "My SSN is 123-45-6789" => "My SSN is [SSN_1]"
     })
 
-    chat = new_chat
-    chat.ask("My email is ralph@example.com")
-    chat.ask("My SSN is 123-45-6789")
+    RubyLLM::TopSecret.with_filtering do
+      chat = new_chat
+      chat.ask("My email is ralph@example.com")
+      chat.ask("My SSN is 123-45-6789")
+    end
 
     expect(WebMock).to have_requested(:post, messages_url).twice
       .with { |req| !req.body.include?("ralph@example.com") && !req.body.include?("123-45-6789") }
@@ -38,7 +50,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
-    chat.ask("My email is ralph@example.com")
+    RubyLLM::TopSecret.with_filtering do
+      chat.ask("My email is ralph@example.com")
+    end
 
     user_message = chat.messages.find { |m| m.role == :user }
     expect(user_message.content).to eq("My email is ralph@example.com")
@@ -49,7 +63,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
 
     chat = new_chat
     chat.messages << RubyLLM::Message.new(role: :assistant, content: nil)
-    chat.ask("My email is ralph@example.com")
+    RubyLLM::TopSecret.with_filtering do
+      chat.ask("My email is ralph@example.com")
+    end
 
     expect(TopSecret::Text).to have_received(:filter_all)
       .with(["My email is ralph@example.com"])
@@ -65,7 +81,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     )
 
     chat = new_chat
-    response = chat.ask("My name is Ralph")
+    response = RubyLLM::TopSecret.with_filtering do
+      chat.ask("My name is Ralph")
+    end
 
     expect(response.content).to eq("Hello Ralph")
   end
@@ -74,7 +92,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     stub_filter_all({"Hi" => "Hi"})
 
     chat = new_chat
-    response = chat.ask("Hi")
+    response = RubyLLM::TopSecret.with_filtering do
+      chat.ask("Hi")
+    end
 
     expect(response.content).to eq("Hello!")
   end
@@ -84,7 +104,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
 
     chat = new_chat
 
-    expect { chat.ask("Hello") }.to raise_error(RubyLLM::TopSecret::Error, /NER model missing/)
+    expect {
+      RubyLLM::TopSecret.with_filtering { chat.ask("Hello") }
+    }.to raise_error(RubyLLM::TopSecret::Error, /NER model missing/)
   end
 
   it "wraps restoring errors in RubyLLM::TopSecret::Error" do
@@ -96,7 +118,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
 
     chat = new_chat
 
-    expect { chat.ask("My name is Ralph") }.to raise_error(RubyLLM::TopSecret::Error, /restore failed/)
+    expect {
+      RubyLLM::TopSecret.with_filtering { chat.ask("My name is Ralph") }
+    }.to raise_error(RubyLLM::TopSecret::Error, /restore failed/)
   end
 
   it "restores values in structured output responses" do
@@ -114,7 +138,9 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     }
 
     chat = new_chat
-    response = chat.with_schema(schema).ask("Tell me about Ralph")
+    response = RubyLLM::TopSecret.with_filtering do
+      chat.with_schema(schema).ask("Tell me about Ralph")
+    end
 
     expect(response.content).to eq({"name" => "Ralph", "city" => "Boston"})
   end
@@ -127,9 +153,11 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       "Ralph lives in Boston" => "[PERSON_1] lives in [LOCATION_1]"
     })
 
-    chat = new_chat
-    chat.ask("My name is Ralph")
-    chat.ask("Ralph lives in Boston")
+    RubyLLM::TopSecret.with_filtering do
+      chat = new_chat
+      chat.ask("My name is Ralph")
+      chat.ask("Ralph lives in Boston")
+    end
 
     expect(WebMock).to have_requested(:post, messages_url).twice
       .with { |req| req.body.include?("[PERSON_1]") && !req.body.include?("Ralph") }
