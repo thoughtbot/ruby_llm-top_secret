@@ -1,5 +1,7 @@
 # RubyLLM::TopSecret
 
+[![Ruby](https://github.com/thoughtbot/ruby_llm-top_secret/actions/workflows/main.yml/badge.svg)](https://github.com/thoughtbot/ruby_llm-top_secret/actions/workflows/main.yml)
+
 Filter sensitive information from [RubyLLM](https://rubyllm.com) conversations using [Top Secret](https://github.com/thoughtbot/top_secret).
 
 ## Installation
@@ -57,24 +59,30 @@ end
 
 Every call to `complete` on this model will filter automatically. The restored (not filtered) response is what gets saved to your database.
 
-**Note:** When filtering is active, the assistant message is written to the database twice — once by RubyLLM's built-in callback (with filtered placeholders), and again by this gem (with restored content). This is a known limitation of the current architecture.
+> [!NOTE]
+> When filtering is active, the assistant message is written to the database twice — once by RubyLLM's built-in callback (with filtered placeholders), and again by this gem (with restored content). This is a known limitation of the current architecture.
 
 #### Per-chat filtering
 
 To control filtering per chat, pass an `if:` condition with a Symbol or Proc. The gem does not provide a database column — your application is responsible for storing the decision and exposing it via a method on the model.
 
-```ruby
-# 1. Add a boolean column to your chats table
-#    rails generate migration AddFilteredToChats filtered:boolean
+1. Add a boolean column to your chats table
 
-# 2. Declare the condition
-class Chat < ApplicationRecord
-  acts_as_chat
-  acts_as_filtered_chat if: :filtered?
-end
-```
+    ```
+    rails generate migration AddFilteredToChats filtered:boolean
+    ```
 
-The `if:` option follows the same convention as [Rails callbacks](https://guides.rubyonrails.org/active_record_callbacks.html#conditional-callbacks) — it accepts a Symbol (method name) or a Proc:
+2. Pass `if: :filtered?` to `acts_as_chat`
+
+    ```ruby
+    class Chat < ApplicationRecord
+      acts_as_chat
+      acts_as_filtered_chat if: :filtered?
+    end
+    ```
+
+> [!NOTE]
+> The `if:` option follows the same convention as [Rails callbacks](https://guides.rubyonrails.org/active_record_callbacks.html#conditional-callbacks) — it accepts a Symbol (method name) or a Proc:
 
 ```ruby
 acts_as_filtered_chat if: -> { filtered? }
@@ -98,13 +106,13 @@ end
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
+To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org)
+
 ## Contributing
 
-See the [CONTRIBUTING] document.
-Thank you, [contributors]!
+[Bug reports](https://github.com/thoughtbot/ruby_llm-top_secret/issues/new?template=bug_report.md) and [pull requests](https://github.com/thoughtbot/ruby_llm-top_secret/pulls) are welcome on GitHub at [https://github.com/thoughtbot/ruby_llm-top_secret](https://github.com/thoughtbot/ruby_llm-top_secret).
 
-[CONTRIBUTING]: CONTRIBUTING.md
-[contributors]: https://github.com/thoughtbot/ruby_llm-top_secret/graphs/contributors
+Please create a [new discussion](https://github.com/thoughtbot/ruby_llm-top_secret/discussions/new?category=ideas) if you want to share ideas for new features.
 
 ## License
 
@@ -115,6 +123,7 @@ under the terms specified in the [LICENSE] file.
 [LICENSE]: /LICENSE.txt
 
 <!-- START /templates/footer.md -->
+
 ## About thoughtbot
 
 ![thoughtbot](https://thoughtbot.com/thoughtbot-logo-for-readmes.svg)
