@@ -68,7 +68,10 @@ class Model < ActiveRecord::Base
 end
 
 require "ruby_llm/top_secret/patches/acts_as_chat"
+require "ruby_llm/top_secret/acts_as_filtered_chat"
 
 RubyLLM::ActiveRecord::ChatMethods.module_eval do
   prepend RubyLLM::TopSecret::Patches::ActsAsChat
 end
+
+ActiveRecord::Base.include RubyLLM::TopSecret::ActsAsFilteredChat

@@ -6,13 +6,15 @@ module RubyLLM
       # Patch for {RubyLLM::ActiveRecord::ChatMethods#complete} that persists
       # the restored response content to the database.
       #
-      # When filtering is active via {RubyLLM::TopSecret.with_filtering},
-      # the default persistence callback (+on_end_message+) fires inside
+      # When filtering is active via {RubyLLM::TopSecret.with_filtering}
+      # (or automatically via {ActsAsFilteredChat}), the default
+      # persistence callback (+on_end_message+) fires inside
       # {Patches::Chat#complete} before restoration occurs, saving filtered
       # content. This patch updates the persisted assistant message with the
       # restored content afterward.
       #
       # @see Patches::Chat
+      # @see ActsAsFilteredChat
       module ActsAsChat
         # @see RubyLLM::ActiveRecord::ChatMethods#complete
         def complete(...)
