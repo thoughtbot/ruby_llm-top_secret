@@ -44,6 +44,42 @@ Without `with_filtering`, conversations behave normally with no filtering overhe
 
 Filtering state is thread-isolated, so concurrent requests in a web server won't interfere with each other.
 
+### Rails integration
+
+In Rails apps with `acts_as_chat`, declare `acts_as_filtered_chat` on your model so that filtering works automatically — including from background jobs where a `with_filtering` block isn't possible.
+
+```ruby
+class Chat < ApplicationRecord
+  acts_as_chat
+  acts_as_filtered_chat
+end
+```
+
+Every call to `complete` on this model will filter automatically. The restored (not filtered) response is what gets saved to your database.
+
+**Note:** When filtering is active, the assistant message is written to the database twice — once by RubyLLM's built-in callback (with filtered placeholders), and again by this gem (with restored content). This is a known limitation of the current architecture.
+
+#### Per-chat filtering
+
+To control filtering per chat, pass an `if:` condition with a Symbol or Proc. The gem does not provide a database column — your application is responsible for storing the decision and exposing it via a method on the model.
+
+```ruby
+# 1. Add a boolean column to your chats table
+#    rails generate migration AddFilteredToChats filtered:boolean
+
+# 2. Declare the condition
+class Chat < ApplicationRecord
+  acts_as_chat
+  acts_as_filtered_chat if: :filtered?
+end
+```
+
+The `if:` option follows the same convention as [Rails callbacks](https://guides.rubyonrails.org/active_record_callbacks.html#conditional-callbacks) — it accepts a Symbol (method name) or a Proc:
+
+```ruby
+acts_as_filtered_chat if: -> { filtered? }
+```
+
 ### Error handling
 
 Errors from Top Secret (filtering or restoring failures) are wrapped in `RubyLLM::TopSecret::Error`. Errors from RubyLLM itself (API failures, etc.) are passed through unchanged.
