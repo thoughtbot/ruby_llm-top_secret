@@ -67,6 +67,12 @@ class Model < ActiveRecord::Base
   acts_as_model
 end
 
+Model.find_or_create_by!(
+  model_id: "claude-3-5-sonnet-20241022",
+  name: "Claude 3.5 Sonnet",
+  provider: "anthropic"
+)
+
 require "ruby_llm/top_secret/patches/acts_as_chat"
 require "ruby_llm/top_secret/acts_as_filtered_chat"
 
