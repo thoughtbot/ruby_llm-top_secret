@@ -9,7 +9,7 @@ Filter sensitive information from [RubyLLM](https://rubyllm.com) conversations u
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "ruby_llm-top_secret", github: "thoughtbot/ruby_llm-top_secret", branch: "main"
+gem "ruby_llm-top_secret"
 ```
 
 Then run:
