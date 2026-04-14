@@ -3,18 +3,14 @@
 module RubyLLM
   module TopSecret
     module Patches
-      # Middleware that intercepts {RubyLLM::Chat#complete} to redact sensitive
+      # Middleware that intercepts {RubyLLM::Chat#complete} to filter sensitive
       # information from all messages before they are sent to the LLM provider,
-      # and rehydrates placeholders in the response with original values.
+      # and restore placeholders in the response with original values.
       #
-      # Uses {TopSecret::Text.filter_all} for batch redaction, ensuring
-      # consistent labels across messages in multi-turn conversations.
-      # Uses {TopSecret::FilteredText.restore} to replace placeholders in the
-      # provider's response with the original sensitive values.
-      #
+      # Delegates to {Payload} for filtering and restoring content.
       # Original message content is preserved after the call via +ensure+.
       #
-      # @raise [RubyLLM::TopSecret::Error] if redaction or rehydration fails
+      # @raise [RubyLLM::TopSecret::Error] if filtering or restoring fails
       #
       # @example
       #   chat = RubyLLM.chat
@@ -26,15 +22,12 @@ module RubyLLM
         def complete(&)
           originals = messages.to_h { |msg| [msg, msg.content] }
 
-          redactable = messages.reject { |msg| msg.content.nil? || msg.content.empty? }
-          contents = redactable.map(&:content)
-          batch_result = ::TopSecret::Text.filter_all(contents)
-          redactable.zip(batch_result.items).each { |msg, item| msg.content = item.output }
+          payload = Payload.new(messages)
+          payload.filter
 
           response = super
 
-          restored = ::TopSecret::FilteredText.restore(response.content, mapping: batch_result.mapping)
-          response.content = restored.output
+          response.content = payload.restore(response.content)
 
           response
         rescue RubyLLM::Error

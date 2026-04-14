@@ -8,7 +8,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .to_return_json(body: {content: [{type: "text", text: "Hello!"}]})
   end
 
-  it "redacts sensitive content before sending to the provider" do
+  it "filters sensitive content before sending to the provider" do
     stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
@@ -18,7 +18,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .with { |req| req.body.include?("[EMAIL_1]") && !req.body.include?("ralph@example.com") }
   end
 
-  it "redacts all messages in a multi-turn conversation" do
+  it "filters all messages in a multi-turn conversation" do
     stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
     stub_filter_all({
       "My email is ralph@example.com" => "My email is [EMAIL_1]",
@@ -44,7 +44,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     expect(user_message.content).to eq("My email is ralph@example.com")
   end
 
-  it "skips empty messages when redacting" do
+  it "skips empty messages when filtering" do
     stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
 
     chat = new_chat
@@ -55,7 +55,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .with(["My email is ralph@example.com"])
   end
 
-  it "rehydrates placeholders in the response" do
+  it "restores placeholders in the response" do
     stub_request(:post, messages_url)
       .to_return_json(body: {content: [{type: "text", text: "Hello [PERSON_1]"}]})
 
@@ -79,7 +79,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     expect(response.content).to eq("Hello!")
   end
 
-  it "wraps redaction errors in RubyLLM::TopSecret::Error" do
+  it "wraps filtering errors in RubyLLM::TopSecret::Error" do
     allow(TopSecret::Text).to receive(:filter_all).and_raise(StandardError, "NER model missing")
 
     chat = new_chat
@@ -87,7 +87,7 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     expect { chat.ask("Hello") }.to raise_error(RubyLLM::TopSecret::Error, /NER model missing/)
   end
 
-  it "wraps rehydration errors in RubyLLM::TopSecret::Error" do
+  it "wraps restoring errors in RubyLLM::TopSecret::Error" do
     stub_filter_all(
       {"My name is Ralph" => "My name is [PERSON_1]"},
       labels: {PERSON_1: "Ralph"}
@@ -97,6 +97,26 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
     chat = new_chat
 
     expect { chat.ask("My name is Ralph") }.to raise_error(RubyLLM::TopSecret::Error, /restore failed/)
+  end
+
+  it "restores values in structured output responses" do
+    stub_request(:post, messages_url)
+      .to_return_json(body: {content: [{type: "text", text: '{"name":"[PERSON_1]","city":"Boston"}'}]})
+
+    stub_filter_all(
+      {"Tell me about Ralph" => "Tell me about [PERSON_1]"},
+      labels: {PERSON_1: "Ralph"}
+    )
+
+    schema = {
+      name: "person",
+      schema: {type: "object", properties: {name: {type: "string"}, city: {type: "string"}}}
+    }
+
+    chat = new_chat
+    response = chat.with_schema(schema).ask("Tell me about Ralph")
+
+    expect(response.content).to eq({"name" => "Ralph", "city" => "Boston"})
   end
 
   it "uses consistent labels for the same entity across messages" do

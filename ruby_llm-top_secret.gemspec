@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Steve Polito"]
   spec.email = ["stevepolito@hey.com"]
 
-  spec.summary = "Redact sensitive information from RubyLLM conversations using Top Secret."
-  spec.description = "A RubyLLM plugin that integrates Top Secret to automatically redact sensitive information from LLM interactions."
+  spec.summary = "Filter sensitive information from RubyLLM conversations using Top Secret."
+  spec.description = "A RubyLLM plugin that integrates Top Secret to automatically filter sensitive information from LLM interactions."
   spec.homepage = "https://github.com/thoughtbot/ruby_llm-top_secret"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
