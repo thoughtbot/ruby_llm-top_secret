@@ -18,6 +18,8 @@ Then run:
 bundle install
 ```
 
+This version supports RubyLLM 2.x. For RubyLLM 1.x, use version 0.1.0.
+
 ## Usage
 
 Requiring the gem patches `RubyLLM::Chat` to support filtering sensitive information before it reaches the LLM provider. Filtering is opt-in per conversation using `with_filtering`.
@@ -44,6 +46,8 @@ Without `with_filtering`, conversations behave normally with no filtering overhe
 4. The response is restored using `TopSecret::FilteredText.restore`
 5. Original message content is always preserved locally
 
+Filtering happens around each provider request (`RubyLLM::Chat#generate`), so every round of a tool loop is filtered. While a request runs, the chat holds filtered copies of its messages. Instrumentation wrapped inside the patch, such as tracing, only sees placeholders. Tool call arguments come back from the provider with placeholders and are passed to your tools as they are.
+
 Filtering state is thread-isolated, so concurrent requests in a web server won't interfere with each other.
 
 ### Rails integration
@@ -57,10 +61,7 @@ class Chat < ApplicationRecord
 end
 ```
 
-Every call to `complete` on this model will filter automatically. The restored (not filtered) response is what gets saved to your database.
-
-> [!NOTE]
-> When filtering is active, the assistant message is written to the database twice — once by RubyLLM's built-in callback (with filtered placeholders), and again by this gem (with restored content). This is a known limitation of the current architecture.
+Every call to `complete` on this model will filter automatically. The restored (not filtered) response is what gets saved to your database, for every assistant message in a tool loop.
 
 #### Per-chat filtering
 
@@ -104,7 +105,7 @@ end
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests against the latest RubyLLM 2.x, and `BUNDLE_GEMFILE=gemfiles/ruby_llm_2_0.gemfile bundle exec rake spec` to run them against RubyLLM 2.0. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org)
 

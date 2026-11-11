@@ -17,7 +17,7 @@ RSpec.describe "acts_as_chat persistence" do
     )
 
     filtered_chat_class = Class.new(Chat) { acts_as_filtered_chat }
-    chat = filtered_chat_class.create!(model: "claude-3-5-sonnet-20241022")
+    chat = filtered_chat_class.create!(model: "claude-haiku-4-5")
     chat.ask("My name is Ralph")
 
     assistant_message = chat.messages.find_by(role: "assistant")
@@ -29,7 +29,7 @@ RSpec.describe "acts_as_chat persistence" do
       acts_as_filtered_chat if: :filtered?
       define_method(:filtered?) { false }
     end
-    chat = filtered_chat_class.create!(model: "claude-3-5-sonnet-20241022")
+    chat = filtered_chat_class.create!(model: "claude-haiku-4-5")
     chat.ask("My name is Ralph")
 
     assistant_message = chat.messages.find_by(role: "assistant")
@@ -41,7 +41,7 @@ RSpec.describe "acts_as_chat persistence" do
       acts_as_filtered_chat if: -> { filtered? }
       define_method(:filtered?) { false }
     end
-    chat = filtered_chat_class.create!(model: "claude-3-5-sonnet-20241022")
+    chat = filtered_chat_class.create!(model: "claude-haiku-4-5")
     chat.ask("My name is Ralph")
 
     assistant_message = chat.messages.find_by(role: "assistant")
@@ -56,7 +56,7 @@ RSpec.describe "acts_as_chat persistence" do
 
       define_method(:filtered?) { false }
     end
-    chat = filtered_chat_class.create!(model: "claude-3-5-sonnet-20241022")
+    chat = filtered_chat_class.create!(model: "claude-haiku-4-5")
     chat.ask("My name is Ralph")
 
     assistant_message = chat.messages.find_by(role: "assistant")
@@ -69,7 +69,7 @@ RSpec.describe "acts_as_chat persistence" do
       labels: {PERSON_1: "Ralph"}
     )
 
-    chat = Chat.create!(model: "claude-3-5-sonnet-20241022")
+    chat = Chat.create!(model: "claude-haiku-4-5")
     RubyLLM::TopSecret.with_filtering do
       chat.ask("My name is Ralph")
     end
@@ -78,16 +78,16 @@ RSpec.describe "acts_as_chat persistence" do
     expect(assistant_message.content).to eq("Hello Ralph")
   end
 
-  private
+  it "persists every restored response in a tool loop" do
+    stub_tool_loop
+    stub_filter_by_replacing("Ralph" => "[PERSON_1]")
 
-  def stub_filter_all(mapping, labels: {})
-    items = mapping.map do |input, output|
-      TopSecret::Text::Result.new(input, output, {})
+    chat = Chat.create!(model: "claude-haiku-4-5")
+    RubyLLM::TopSecret.with_filtering do
+      chat.with_tools(LookupTool).ask("Where does Ralph live?")
     end
-    batch = TopSecret::Text::BatchResult.new(mapping: labels, items: items)
 
-    @filter_all_responses ||= []
-    @filter_all_responses << batch
-    allow(TopSecret::Text).to receive(:filter_all).and_return(*@filter_all_responses)
+    contents = chat.messages.where(role: "assistant").order(:id).pluck(:content)
+    expect(contents).to eq(["Looking up Ralph", "Ralph lives in Boston"])
   end
 end

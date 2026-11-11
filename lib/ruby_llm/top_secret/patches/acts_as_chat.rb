@@ -3,26 +3,27 @@
 module RubyLLM
   module TopSecret
     module Patches
-      # Patch for {RubyLLM::ActiveRecord::ChatMethods#complete} that persists
-      # the restored response content to the database.
+      # Patch for {RubyLLM::ActiveRecord::ChatMethods} that persists restored
+      # response content to the database.
       #
       # When filtering is active via {RubyLLM::TopSecret.with_filtering}
-      # (or automatically via {ActsAsFilteredChat}), the default
-      # persistence callback (+on_end_message+) fires inside
-      # {Patches::Chat#complete} before restoration occurs, saving filtered
-      # content. This patch updates the persisted assistant message with the
-      # restored content afterward.
+      # (or automatically via {ActsAsFilteredChat}), RubyLLM's +after_message+
+      # persistence callback runs inside {Patches::Chat#generate} with the
+      # filtered response. This patch restores the content RubyLLM saves
+      # for each response, including every round of a tool loop.
       #
       # @see Patches::Chat
       # @see ActsAsFilteredChat
       module ActsAsChat
-        # @see RubyLLM::ActiveRecord::ChatMethods#complete
-        def complete(...)
-          response = super
+        private
 
-          @message.update!(content: response.content)
+        # @see RubyLLM::ActiveRecord::ChatMethods#message_attributes
+        def message_attributes(message)
+          attributes = super
+          payload = to_llm.top_secret_payload
+          return attributes if payload.nil? || attributes[:content].nil?
 
-          response
+          attributes.merge(content: payload.restore(attributes[:content]))
         end
       end
     end

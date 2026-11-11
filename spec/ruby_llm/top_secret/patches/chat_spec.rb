@@ -142,7 +142,54 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       chat.with_schema(schema).ask("Tell me about Ralph")
     end
 
-    expect(response.content).to eq({"name" => "Ralph", "city" => "Boston"})
+    expect(response.parsed).to eq({"name" => "Ralph", "city" => "Boston"})
+  end
+
+  it "filters a completion requested after ask_later" do
+    stub_filter_all({"My email is ralph@example.com" => "My email is [EMAIL_1]"})
+
+    RubyLLM::TopSecret.with_filtering do
+      new_chat.ask_later("My email is ralph@example.com").complete
+    end
+
+    expect(WebMock).to have_requested(:post, messages_url)
+      .with { |req| req.body.include?("[EMAIL_1]") && !req.body.include?("ralph@example.com") }
+  end
+
+  it "keeps the original message objects in the conversation" do
+    stub_filter_all({"My name is Ralph" => "My name is [PERSON_1]"})
+
+    chat = new_chat.ask_later("My name is Ralph")
+    user_message = chat.messages.last
+    RubyLLM::TopSecret.with_filtering { chat.complete }
+
+    expect(chat.messages.first).to equal(user_message)
+  end
+
+  it "restores the reply kept in the conversation" do
+    stub_request(:post, messages_url)
+      .to_return_json(body: {content: [{type: "text", text: "Hello [PERSON_1]"}]})
+    stub_filter_all(
+      {"My name is Ralph" => "My name is [PERSON_1]"},
+      labels: {PERSON_1: "Ralph"}
+    )
+
+    chat = new_chat
+    RubyLLM::TopSecret.with_filtering { chat.ask("My name is Ralph") }
+
+    expect(chat.messages.last.content).to eq("Hello Ralph")
+  end
+
+  it "filters every request in a tool loop" do
+    stub_tool_loop
+    stub_filter_by_replacing("Ralph" => "[PERSON_1]")
+
+    RubyLLM::TopSecret.with_filtering do
+      new_chat.with_tools(LookupTool).ask("Where does Ralph live?")
+    end
+
+    expect(WebMock).to have_requested(:post, messages_url).twice
+      .with { |req| !req.body.include?("Ralph") }
   end
 
   it "uses consistent labels for the same entity across messages" do
@@ -163,22 +210,24 @@ RSpec.describe RubyLLM::TopSecret::Patches::Chat do
       .with { |req| req.body.include?("[PERSON_1]") && !req.body.include?("Ralph") }
   end
 
-  private
+  it "keeps the outermost payload when the patch is prepended twice" do
+    stub_request(:post, messages_url)
+      .to_return_json(body: {content: [{type: "text", text: "Hello [PERSON_1]"}]})
+    stub_filter_by_replacing("Ralph" => "[PERSON_1]")
 
-  def new_chat
-    RubyLLM.config.with(anthropic_api_key: "test-key") do
-      RubyLLM::Chat.new(model: "model", assume_model_exists: true, provider: :anthropic)
-    end
+    chat = new_chat(Class.new(RubyLLM::Chat) { prepend RubyLLM::TopSecret::Patches::Chat.dup })
+    restored_while_persisting = nil
+    chat.after_message { |message| restored_while_persisting = chat.top_secret_payload.restore(message.content) }
+    RubyLLM::TopSecret.with_filtering { chat.ask("My name is Ralph") }
+
+    expect(restored_while_persisting).to eq("Hello Ralph")
   end
 
-  def stub_filter_all(mapping, labels: {})
-    items = mapping.map do |input, output|
-      TopSecret::Text::Result.new(input, output, {})
-    end
-    batch = TopSecret::Text::BatchResult.new(mapping: labels, items: items)
+  private
 
-    @filter_all_responses ||= []
-    @filter_all_responses << batch
-    allow(TopSecret::Text).to receive(:filter_all).and_return(*@filter_all_responses)
+  def new_chat(chat_class = RubyLLM::Chat)
+    RubyLLM.config.with(anthropic_api_key: "test-key") do
+      chat_class.new(model: "model", assume_model_exists: true, provider: :anthropic)
+    end
   end
 end
