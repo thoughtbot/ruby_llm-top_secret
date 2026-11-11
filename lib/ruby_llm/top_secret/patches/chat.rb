@@ -3,13 +3,18 @@
 module RubyLLM
   module TopSecret
     module Patches
-      # Middleware that intercepts {RubyLLM::Chat#complete} to filter sensitive
+      # Middleware that intercepts {RubyLLM::Chat#generate}, the single
+      # provider request behind +ask+ and +complete+, to filter sensitive
       # information from messages before they are sent to the LLM provider,
       # and restore placeholders in the response with original values.
       #
       # Filtering only runs when opted in via {RubyLLM::TopSecret.with_filtering}.
       # Delegates to {Payload} for filtering and restoring content.
-      # Original message content is preserved after the call via +ensure+.
+      #
+      # While the request runs, the chat holds filtered copies of its
+      # messages, so anything wrapped inside this patch, such as tracing,
+      # only sees placeholders. Afterwards the chat holds the original
+      # messages again, followed by restored copies of the new ones.
       #
       # @raise [RubyLLM::TopSecret::Error] if filtering or restoring fails
       #
@@ -21,26 +26,39 @@ module RubyLLM
       #     # => Response "[PERSON_1] is a great name" becomes "Ralph is a great name"
       #   end
       module Chat
-        # @see RubyLLM::Chat#complete
-        def complete(&)
-          return super unless RubyLLM::TopSecret.filtering?
+        # @return [Payload, nil] the payload of the request in flight, which
+        #   {ActsAsChat} reads to persist restored content
+        attr_reader :top_secret_payload
 
-          originals = messages.to_h { |msg| [msg, msg.content] }
+        # Only the outermost call filters when the patch is prepended more
+        # than once, so instrumentation can sit between two copies of it.
+        #
+        # @see RubyLLM::Chat#generate
+        def generate(&)
+          return super if !RubyLLM::TopSecret.filtering? || top_secret_payload
 
-          payload = Payload.new(messages)
-          payload.filter
+          with_filtered_messages { super }
+        end
 
-          response = super
+        private
 
-          response.content = payload.restore(response.content)
+        def with_filtered_messages
+          @top_secret_payload = Payload.new(messages)
+          originals_by_copy = @top_secret_payload.filtered_messages.zip(messages).to_h
+          @messages = originals_by_copy.keys
 
-          response
+          response = yield
+
+          restored = @messages.to_h { |msg| [msg, originals_by_copy.fetch(msg) { @top_secret_payload.restored(msg) }] }
+          @messages = restored.values
+          restored.fetch(response, response)
         rescue RubyLLM::Error
           raise
         rescue => e
           raise RubyLLM::TopSecret::Error, e.message
         ensure
-          originals&.each { |msg, content| msg.content = content }
+          @messages = @messages.map { |msg| originals_by_copy.fetch(msg, msg) } if originals_by_copy
+          @top_secret_payload = nil
         end
       end
     end

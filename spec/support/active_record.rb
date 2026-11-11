@@ -1,54 +1,125 @@
 # frozen_string_literal: true
 
 require "active_record"
-require "ruby_llm/active_record/acts_as"
-ActiveRecord::Base.include RubyLLM::ActiveRecord::ActsAs
+require "rails"
+require "ruby_llm/railtie"
+require "ruby_llm/top_secret/railtie"
+
+[RubyLLM::Railtie, RubyLLM::TopSecret::Railtie].each do |railtie|
+  railtie.initializers.find { |initializer| initializer.name.end_with?(".active_record") }.run
+end
 
 ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
 
+# Mirrors the tables RubyLLM's install generator creates, covering every
+# column from 2.0 through the latest 2.x so one schema serves each version.
 ActiveRecord::Schema.define do
+  create_table :ruby_llm_models do |t|
+    t.string :model_id, null: false
+    t.string :name, null: false
+    t.string :provider, null: false
+    t.string :family
+    t.datetime :model_created_at
+    t.integer :context_window
+    t.integer :max_output_tokens
+    t.date :knowledge_cutoff
+    t.datetime :unlisted_at
+    t.json :modalities, default: {}
+    t.json :capabilities, default: []
+    t.json :pricing, default: {}
+    t.json :metadata, default: {}
+    t.timestamps
+    t.index [:provider, :model_id], unique: true
+  end
+
   create_table :chats do |t|
+    t.references :ruby_llm_model, null: false
+    t.boolean :cancelled, null: false, default: false
+    t.string :claim_token
+    t.datetime :claimed_until
     t.timestamps
   end
 
   create_table :messages do |t|
-    t.references :chat
-    t.references :model
-    t.string :role
+    t.references :chat, null: false
+    t.string :role, null: false
     t.text :content
+    t.boolean :cache_until_here, null: false, default: false
+    t.string :cache_ttl
+    t.text :thinking_text
+    t.text :thinking_signature
+    t.json :citations
+    t.json :server_tool_calls
+    t.json :raw_content
+    t.json :raw_reasoning
+    t.string :phase
+    t.text :continuation
+    t.string :finish_reason
+    t.timestamps
+  end
+
+  create_table :ruby_llm_tool_calls do |t|
+    t.references :message, polymorphic: true, null: false
+    t.references :result, polymorphic: true
+    t.string :tool_call_id, null: false
+    t.string :provider_call_id
+    t.string :namespace
+    t.string :name, null: false
+    t.text :thought_signature
+    t.string :approval
+    t.boolean :remote, default: false, null: false
+    t.datetime :claimed_until
+    t.json :arguments, default: {}
+    t.json :mcp_state
+    t.json :mcp_result
+    t.timestamps
+    t.index :tool_call_id, unique: true
+  end
+
+  create_table :ruby_llm_usages do |t|
+    t.references :chat, polymorphic: true
+    t.references :message, polymorphic: true
+    t.references :owner, polymorphic: true
+    t.string :operation, null: false
+    t.string :provider, null: false
+    t.string :model, null: false
+    t.string :status, null: false
     t.integer :input_tokens
     t.integer :output_tokens
+    t.integer :cache_read_tokens
+    t.integer :cache_write_tokens
+    t.integer :thinking_tokens
+    t.integer :characters
+    t.decimal :audio_seconds, precision: 16, scale: 6
+    t.integer :search_units
+    t.json :server_tool_use
+    t.decimal :input_cost, precision: 16, scale: 10
+    t.decimal :output_cost, precision: 16, scale: 10
+    t.decimal :cache_read_cost, precision: 16, scale: 10
+    t.decimal :cache_write_cost, precision: 16, scale: 10
+    t.decimal :thinking_cost, precision: 16, scale: 10
+    t.decimal :characters_cost, precision: 16, scale: 10
+    t.decimal :audio_seconds_cost, precision: 16, scale: 10
+    t.decimal :search_units_cost, precision: 16, scale: 10
+    t.decimal :total_cost, precision: 16, scale: 10
+    t.string :workflow_id
+    t.string :workflow_name
+    t.string :workflow_step_id
+    t.string :workflow_step_name
     t.timestamps
   end
 
-  create_table :tool_calls do |t|
-    t.references :message
-    t.string :tool_call_id
-    t.string :name
-    t.json :arguments
+  create_table :ruby_llm_queued_messages do |t|
+    t.references :chat, polymorphic: true, null: false
+    t.references :sender, polymorphic: true
+    t.text :content
+    t.boolean :steer, default: true, null: false
     t.timestamps
   end
-
-  create_table :models do |t|
-    t.string :model_id
-    t.string :name
-    t.string :provider
-    t.string :family
-    t.integer :context_window
-    t.integer :max_output_tokens
-    t.json :capabilities
-    t.json :modalities
-    t.json :pricing
-    t.json :metadata
-    t.timestamps
-  end
-
-  add_reference :chats, :model
 end
 
 RubyLLM.configure do |config|
   config.anthropic_api_key = "test-key"
-  config.use_new_acts_as = true
 end
 
 class Chat < ActiveRecord::Base
@@ -58,26 +129,3 @@ end
 class Message < ActiveRecord::Base
   acts_as_message
 end
-
-class ToolCall < ActiveRecord::Base
-  acts_as_tool_call
-end
-
-class Model < ActiveRecord::Base
-  acts_as_model
-end
-
-Model.find_or_create_by!(
-  model_id: "claude-3-5-sonnet-20241022",
-  name: "Claude 3.5 Sonnet",
-  provider: "anthropic"
-)
-
-require "ruby_llm/top_secret/patches/acts_as_chat"
-require "ruby_llm/top_secret/acts_as_filtered_chat"
-
-RubyLLM::ActiveRecord::ChatMethods.module_eval do
-  prepend RubyLLM::TopSecret::Patches::ActsAsChat
-end
-
-ActiveRecord::Base.include RubyLLM::TopSecret::ActsAsFilteredChat
